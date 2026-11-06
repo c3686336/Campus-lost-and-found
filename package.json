@@ -1,0 +1,13 @@
+{
+  "name": "campus-found",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:load": "node scripts/load-test.mjs",
+    "test:browser": "node scripts/browser-test.mjs"
+  }
+}

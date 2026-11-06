@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#173b3f">
+  <meta name="description" content="캠퍼스에서 잃어버린 일상, 다시 연결하다. KAIST 분실물 신고와 안전한 반환 서비스.">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="stylesheet" href="/styles.css">
+  <title>다시, 캠퍼스 · Campus Found</title>
+</head>
+<body>
+  <div id="network" class="network hidden" role="status">오프라인입니다. 연결 후 다시 시도해 주세요. 변경사항은 전송되지 않습니다.</div>
+  <div id="app"><div class="boot"><span class="brand-mark">↗</span><p>캠퍼스를 연결하고 있어요.</p></div></div>
+  <dialog id="modal" aria-labelledby="modal-title"></dialog>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
