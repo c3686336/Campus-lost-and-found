@@ -60,7 +60,7 @@ export function createApp(options = {}) {
         const session=cookie(req);
         const u=session ? service.state.users.find(u=>u.id===session.userId && u.status==='active') : null;
         if(path==='/api/session'&&req.method==='GET')return json(res,200,{user:publicUser(u),demo:true,settings:service.state.settings});
-        if(path==='/api/auth/register'&&req.method==='POST')return json(res,201,service.register(payload));
+        if(path==='/api/auth/register'&&req.method==='POST')return json(res,201,await service.register(payload));
         if(path==='/api/auth/verify'&&req.method==='POST')return json(res,200,service.verify(payload));
         if(path==='/api/auth/login'&&req.method==='POST') {
           const now=Date.now();
@@ -83,9 +83,9 @@ export function createApp(options = {}) {
         if(path==='/api/auth/logout'&&req.method==='POST'){if(session)sessions.delete(session.token);res.setHeader('Set-Cookie',`${COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);return json(res,200,{message:'로그아웃되었습니다.'});}
         if(!u)throw new ApiError(401,'로그인이 필요합니다.');
         if(path==='/api/data'&&req.method==='GET')return json(res,200,service.data(u));
-        if(path==='/api/items'&&req.method==='POST')return json(res,201,service.createItem(u,payload));
+        if(path==='/api/items'&&req.method==='POST')return json(res,201,await service.createItem(u,payload));
         let match;
-        if((match=/^\/api\/items\/([^/]+)$/.exec(path))&&req.method==='PATCH')return json(res,200,service.editItem(u,match[1],payload));
+        if((match=/^\/api\/items\/([^/]+)$/.exec(path))&&req.method==='PATCH')return json(res,200,await service.editItem(u,match[1],payload));
         if((match=/^\/api\/items\/([^/]+)\/action$/.exec(path))&&req.method==='POST')return json(res,200,service.itemAction(u,match[1],payload));
         if(path==='/api/requests'&&req.method==='POST')return json(res,201,service.createRequest(u,payload));
         if((match=/^\/api\/requests\/([^/]+)\/action$/.exec(path))&&req.method==='POST')return json(res,200,service.requestAction(u,match[1],payload));

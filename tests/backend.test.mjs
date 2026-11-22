@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../server.mjs';
 import { validateFile } from '../lib/service.mjs';
+import { images, invalidImages, oversizedImage } from './fixtures/images.mjs';
 
 async function fixture(t) {
   const dataDir=await mkdtemp(join(tmpdir(),'campus-backend-'));
@@ -49,6 +50,20 @@ test('complete ownership workflow, competing claims, privacy, wrong handover and
   assert.equal((await minji('/api/data')).body.items.find(i=>i.id==='demo_lost_umbrella').state,'Closed');
   assert.equal((await admin(`/api/items/${umbrella.id}/action`,'POST',{action:'report-error',reason:'수령자 재확인'})).status,200);
   assert.equal((await minji('/api/data')).body.items.find(i=>i.id===umbrella.id).pickupLocation,undefined);
+  const corrected=await admin(`/api/items/${umbrella.id}`,'PATCH',{name:'오인도 확인 중인 우산',storageLocation:'사고 조사 보관함',confidential:'노란 별 스티커 확인'});
+  assert.equal(corrected.status,200);
+  assert.equal(corrected.body.item.name,'오인도 확인 중인 우산');
+  assert.equal(corrected.body.item.storageLocation,'사고 조사 보관함');
+  assert.equal(corrected.body.item.confidential,'노란 별 스티커 확인');
+  assert.equal(corrected.body.item.blocked,true);
+  assert.equal(corrected.body.item.errorReason,'수령자 재확인');
+  assert.equal(corrected.body.item.state,'Recovered');
+  assert.equal((await minji(`/api/items/${umbrella.id}`,'PATCH',{name:'권한 없는 수정'})).status,403);
+  assert.equal((await finder(`/api/items/${umbrella.id}`,'PATCH',{name:'습득자 수정'})).status,403);
+  assert.equal((await minji(`/api/requests/${rid}/pickup`,'POST')).status,409);
+  assert.equal((await admin(`/api/items/${umbrella.id}/action`,'POST',{action:'handover'})).status,409);
+  assert.equal((await admin(`/api/items/${umbrella.id}/action`,'POST',{action:'special',value:true})).status,409);
+  assert.equal((await admin('/api/data')).body.items.find(i=>i.id===umbrella.id).blocked,true);
   assert.equal((await admin(`/api/items/${umbrella.id}/action`,'POST',{action:'resolve',reason:'소유자 확인 완료'})).status,200);
   assert.ok((await admin('/api/data')).body.audit.some(a=>a.action==='물품 handover'));
 });
@@ -113,8 +128,84 @@ test('retention, unclaimed marker, disposal and deletion policy',async t=>{
   assert.equal((await admin('/api/data')).body.items.some(i=>i.id==='demo_found_earbuds'),false);
 });
 
-test('image upload rejects signature-only and truncated files but accepts a complete PNG',()=>{
-  for(const [type,bytes]of [['image/png',Buffer.from([137,80,78,71,13,10,26,10])],['image/jpeg',Buffer.from([255,216,255])],['image/webp',Buffer.from('RIFF0000WEBP')]])assert.throws(()=>validateFile({name:'fake',type,data:`data:${type};base64,${bytes.toString('base64')}`}));
-  const data='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aYfQAAAAASUVORK5CYII=';
-  assert.equal(validateFile({name:'one.png',type:'image/png',data}).data,data);
+test('image validation decodes supported static and animated formats and rejects corrupt or oversized content',async()=>{
+  for(const file of invalidImages)await assert.rejects(validateFile(file),{status:400});
+  for(const file of images)assert.deepEqual(await validateFile(file),file);
+  await assert.rejects(validateFile(oversizedImage),{status:400});
+  await assert.rejects(validateFile({...images[0],type:'image/jpeg'}),{status:400});
+  await assert.rejects(validateFile({...images[0],data:images[0].data.replace('image/png','image/jpeg')}),{status:400});
+});
+
+test('invalid image uploads fail without saving items, edits, documents or audit entries',async t=>{
+  const{app,admin,minji,client}=await fixture(t);
+  const item={kind:'lost',name:'사진 검증',category:'기타',location:'강의실',date:'2026-11-05',description:'사진이 첨부된 신고'};
+  const before=structuredClone(app.service.state);
+  const external=client();
+  for(const image of [...invalidImages,oversizedImage]){
+    assert.equal((await minji('/api/items','POST',{...item,image})).status,400);
+    assert.equal((await admin('/api/items/demo_found_umbrella','PATCH',{name:'저장되면 안 됨',image})).status,400);
+    assert.equal((await external('/api/auth/register','POST',{name:'외부 구성원',email:'invalid-image@example.org',password:'ExternalPass!24',document:image})).status,400);
+    assert.deepEqual(app.service.state,before);
+  }
+});
+
+test('valid image uploads retain original static and animated bytes through creation and correction',async t=>{
+  const{admin,minji,client}=await fixture(t);
+  const item={kind:'lost',name:'사진 검증',category:'기타',location:'강의실',date:'2026-11-05',description:'사진이 첨부된 신고'};
+  for(const image of images){
+    const created=await minji('/api/items','POST',{...item,image});
+    assert.equal(created.status,201);
+    assert.equal(created.body.item.image,image.data);
+    const edited=await admin('/api/items/demo_found_umbrella','PATCH',{image});
+    assert.equal(edited.status,200);
+    assert.equal(edited.body.item.image,image.data);
+    assert.equal((await admin('/api/items/demo_found_umbrella','PATCH',{description:'사진을 유지하는 설명 수정'})).body.item.image,image.data);
+  }
+  const external=client();
+  assert.equal((await external('/api/auth/register','POST',{name:'외부 구성원',email:'image-proof@example.org',password:'ExternalPass!24',document:images[0]})).status,201);
+});
+
+test('async image validation rechecks live users, roles and item state before committing',async t=>{
+  const{app}=await fixture(t);
+  const service=app.service,admin=service.user('demo_admin'),member=service.user('demo_minji');
+  const image=images[0];
+  const before=structuredClone(service.state.items);
+  const creating=service.createItem(member,{kind:'lost',name:'차단 중 업로드',category:'기타',location:'강의실',date:'2026-11-05',description:'저장되면 안 됨',image});
+  service.userAction(admin,member.id,{action:'block'});
+  await assert.rejects(creating,{status:401});
+  assert.deepEqual(service.state.items,before);
+  service.userAction(admin,member.id,{action:'unblock'});
+
+  service.userAction(admin,'demo_finder',{action:'role',role:'Administrator'});
+  const editingAdmin=service.user('demo_finder');
+  const foundBefore=structuredClone(service.item('demo_found_umbrella'));
+  const editing=service.editItem(editingAdmin,foundBefore.id,{name:'권한 회수 중 수정',image});
+  service.userAction(admin,editingAdmin.id,{action:'role',role:'User'});
+  await assert.rejects(editing,{status:403});
+  assert.deepEqual(service.item(foundBefore.id),foundBefore);
+
+  const lostId='demo_lost_umbrella';
+  const closing=service.editItem(service.user(member.id),lostId,{name:'철회 중 수정',image});
+  service.itemAction(service.user(member.id),lostId,{action:'withdraw'});
+  const withdrawn=structuredClone(service.item(lostId));
+  await assert.rejects(closing,{status:403});
+  assert.deepEqual(service.item(lostId),withdrawn);
+});
+
+test('async image correction merges the current item and registration checks uniqueness after decoding',async t=>{
+  const{app}=await fixture(t);
+  const service=app.service,admin=service.user('demo_admin'),image=images[0];
+  const correcting=service.editItem(admin,'demo_found_umbrella',{image});
+  await service.editItem(admin,'demo_found_umbrella',{name:'동시에 정정된 이름',storageLocation:'새 보관함'});
+  const corrected=await correcting;
+  assert.equal(corrected.item.name,'동시에 정정된 이름');
+  assert.equal(corrected.item.storageLocation,'새 보관함');
+  assert.equal(corrected.item.image,image.data);
+
+  const account={name:'외부 구성원',email:'concurrent@example.org',password:'ExternalPass!24',document:image};
+  const registrations=await Promise.allSettled([service.register(account),service.register(account)]);
+  assert.equal(registrations.filter(r=>r.status==='fulfilled').length,1);
+  const rejected=registrations.find(r=>r.status==='rejected');
+  assert.equal(rejected.reason.status,409);
+  assert.equal(service.state.users.filter(u=>u.email===account.email).length,1);
 });

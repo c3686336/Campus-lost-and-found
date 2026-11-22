@@ -36,6 +36,19 @@ try {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `Horizontal page overflow at ${page.viewportSize().width}px`);
   }
 
+  await member.goto(base);
+  await member.locator('form[data-form=login] [name=email]').fill('minji@kaist.ac.kr');
+  await member.locator('form[data-form=login] [name=password]').fill('WrongPassword!24');
+  await member.locator('[data-testid=login-button]').click();
+  const loginError = member.locator('form[data-form=login] .form-error');
+  await loginError.waitFor({ state: 'visible' });
+  assert.equal(await loginError.textContent(), '이메일 또는 비밀번호가 올바르지 않습니다.');
+  assert.equal(await member.locator('form[data-form=login] [name=email]').inputValue(), 'minji@kaist.ac.kr');
+  assert.equal(await member.locator('.shell').count(), 0);
+  assert.equal((await (await member.request.get(`${base}/api/session`)).json()).user, null);
+  await member.screenshot({ path: join(output, 'login-error.png') });
+  checks.push('invalid-password login retains visible feedback and denies access');
+
   await login(member);
   await member.screenshot({ path: join(output, 'desktop.png'), fullPage: true });
   await noOverflow(member);
@@ -87,6 +100,43 @@ try {
   await nav(member,'mine');
   assert.ok((await member.locator('.item-card').filter({ hasText: '남색 장우산' }).textContent()).includes('찾았어요'));
   checks.push('request, administrator approval, audited pickup reveal, handover and linked lost closure');
+
+  await nav(admin,'admin-items');
+  await admin.locator('[data-action=detail][data-id=demo_found_umbrella]').click();
+  await admin.locator('#modal [data-action=report-error]').click();
+  await admin.locator('#modal [name=reason]').fill('오인도 정정 검수');
+  await submit(admin);
+  await admin.locator('#modal').waitFor({ state: 'hidden' });
+  await admin.locator('[data-action=detail][data-id=demo_found_umbrella]').click();
+  await admin.locator('#modal [data-action=edit]').click();
+  await admin.locator('#modal [name=name]').fill('오인도 처리 중 정정한 우산');
+  await submit(admin);
+  await admin.locator('#modal').waitFor({ state: 'hidden' });
+  await admin.locator('[data-action=detail][data-id=demo_found_umbrella]').click();
+  assert.equal(await admin.locator('#modal-title').textContent(), '오인도 처리 중 정정한 우산');
+  await admin.locator('#modal [data-action=resolve]').waitFor();
+  const incidentData = await (await admin.request.get(`${base}/api/data`)).json();
+  const incidentItem = incidentData.items.find(item => item.id === 'demo_found_umbrella');
+  assert.equal(incidentItem.blocked, true);
+  assert.equal(incidentItem.state, 'Recovered');
+  await admin.screenshot({ path: join(output, 'incident-correction.png') });
+  await close(admin);
+  await member.reload();
+  await nav(member,'requests');
+  assert.equal(await member.locator('[data-action=pickup]').count(), 0);
+  checks.push('administrator correction during an unresolved incident preserves the user lock');
+
+  await member.locator('[data-testid=new-report]').click();
+  await member.locator('#modal [name=name]').fill('만료된 세션 신고');
+  await member.locator('#modal [name=location]').fill('도서관');
+  await member.locator('#modal [name=description]').fill('세션 만료 시 로그인 안내 검수');
+  await member.request.post(`${base}/api/auth/logout`, { data: {} });
+  await submit(member);
+  await member.locator('form[data-form=login]').waitFor();
+  await member.locator('#toast').filter({ hasText: '로그인이 필요합니다.' }).waitFor({ state: 'visible' });
+  assert.equal(await member.locator('#modal').isVisible(), false);
+  checks.push('expired-session form submission returns to login with visible feedback');
+  await login(member);
 
   await nav(admin,'settings');
   await admin.locator('[name=storedDays]').fill('42');

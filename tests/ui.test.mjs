@@ -150,3 +150,19 @@ test('item detail offers audited pickup access when list responses contain no lo
   assert.ok(c.dialog.innerHTML.includes('수령 장소 확인'));
   assert.ok(c.dialog.innerHTML.includes('data-id="request1"'));
 });
+
+test('unresolved incident permits administrator correction but exposes no user actions', () => {
+  for (const role of ['Administrator', 'User']) {
+    const c = client(async () => response({}));
+    const state = snapshot(role);
+    state.items = [{id: 'incident', kind: 'found', ownerId: 'u1', name: '우산', category: '기타', state: 'Recovered', blocked: true, location: '도서관', date: '2026-11-01', description: '오인도 조사 중'}];
+    state.requests = [{id: 'completed', itemId: 'incident', userId: 'u1', status: 'Completed'}];
+    c.ui.configure(state, current => c.render(current));
+    c.ui.detail('incident');
+    assert.equal(c.dialog.innerHTML.includes('data-action="edit"'), role === 'Administrator');
+    assert.equal(c.dialog.innerHTML.includes('data-action="resolve"'), role === 'Administrator');
+    for (const action of ['pickup', 'new-request', 'handover', 'withdraw', 'toggle-special']) {
+      assert.ok(!c.dialog.innerHTML.includes(`data-action="${action}"`));
+    }
+  }
+});
