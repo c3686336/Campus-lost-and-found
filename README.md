@@ -79,6 +79,8 @@ npm run test:browser
 
 브라우저 검증은 격리된 데이터와 프로필을 사용합니다. 가입·문서 심사·사진 신고·반환 승인·장소 열람·인도·입력 유지·모바일 너비·오프라인 화면을 검사하고 `test-results/browser`에 스크린샷과 결과를 저장합니다.
 
+GitHub Actions의 `.github/workflows/ci.yml`은 `main` push, `main` 대상 pull request, 수동 실행에서 Ubuntu 24.04·Node.js 24로 `npm test`, `npm run test:load`, `npm run test:browser`를 실행합니다. Chromium과 고정 버전의 Playwright는 CI에서 별도로 설치하며, 브라우저 스크린샷·결과는 `browser-results` 아티팩트로 7일간 보관합니다. 기본 토큰 권한은 저장소 읽기 전용입니다.
+
 2026-11-06 수정본은 macOS, Node.js v24.22.1에서 자동 회귀 테스트 **35개**, 동시 요청 10개로 총 **200건**을 모두 통과했습니다. 조회 평균 6.06ms, 등록 평균 6.72ms로 시연 임계값을 통과했습니다. 실제 Chrome에서도 문서 승인·사진 신고·반환·열람 감사·모바일 너비·오프라인 화면을 검증했습니다. 범위와 한계는 `docs/COMPLIANCE.md`에 기록했습니다.
 
 수정 전 기록: 2026-11-05 Ubuntu(WSL), Linux용 Node.js v24.22.2에서 기능 테스트 11개와 동시 요청 200건이 모두 통과했습니다. `start.sh`를 다른 작업 디렉터리에서 실행해 HTTP 응답과 SIGTERM 정상 종료도 확인했습니다.
