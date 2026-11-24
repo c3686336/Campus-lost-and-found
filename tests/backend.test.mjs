@@ -170,7 +170,7 @@ test('async image validation rechecks live users, roles and item state before co
   const service=app.service,admin=service.user('demo_admin'),member=service.user('demo_minji');
   const image=images[0];
   const before=structuredClone(service.state.items);
-  const creating=service.createItem(member,{kind:'lost',name:'차단 중 업로드',category:'기타',location:'강의실',date:'2026-11-05',description:'저장되면 안 됨',image});
+  const creating=service.createItem(()=>member.id,{kind:'lost',name:'차단 중 업로드',category:'기타',location:'강의실',date:'2026-11-05',description:'저장되면 안 됨',image});
   service.userAction(admin,member.id,{action:'block'});
   await assert.rejects(creating,{status:401});
   assert.deepEqual(service.state.items,before);
@@ -179,13 +179,13 @@ test('async image validation rechecks live users, roles and item state before co
   service.userAction(admin,'demo_finder',{action:'role',role:'Administrator'});
   const editingAdmin=service.user('demo_finder');
   const foundBefore=structuredClone(service.item('demo_found_umbrella'));
-  const editing=service.editItem(editingAdmin,foundBefore.id,{name:'권한 회수 중 수정',image});
+  const editing=service.editItem(()=>editingAdmin.id,foundBefore.id,{name:'권한 회수 중 수정',image});
   service.userAction(admin,editingAdmin.id,{action:'role',role:'User'});
   await assert.rejects(editing,{status:403});
   assert.deepEqual(service.item(foundBefore.id),foundBefore);
 
   const lostId='demo_lost_umbrella';
-  const closing=service.editItem(service.user(member.id),lostId,{name:'철회 중 수정',image});
+  const closing=service.editItem(()=>member.id,lostId,{name:'철회 중 수정',image});
   service.itemAction(service.user(member.id),lostId,{action:'withdraw'});
   const withdrawn=structuredClone(service.item(lostId));
   await assert.rejects(closing,{status:403});
@@ -195,8 +195,8 @@ test('async image validation rechecks live users, roles and item state before co
 test('async image correction merges the current item and registration checks uniqueness after decoding',async t=>{
   const{app}=await fixture(t);
   const service=app.service,admin=service.user('demo_admin'),image=images[0];
-  const correcting=service.editItem(admin,'demo_found_umbrella',{image});
-  await service.editItem(admin,'demo_found_umbrella',{name:'동시에 정정된 이름',storageLocation:'새 보관함'});
+  const correcting=service.editItem(()=>admin.id,'demo_found_umbrella',{image});
+  await service.editItem(()=>admin.id,'demo_found_umbrella',{name:'동시에 정정된 이름',storageLocation:'새 보관함'});
   const corrected=await correcting;
   assert.equal(corrected.item.name,'동시에 정정된 이름');
   assert.equal(corrected.item.storageLocation,'새 보관함');

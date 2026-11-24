@@ -5,6 +5,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../server.mjs';
+import sharp from 'sharp';
+import { images } from './fixtures/images.mjs';
 
 // Independent review regressions: verify authorization at the moment an action
 // executes, including requests whose JSON body arrives after an account change.
@@ -263,3 +265,50 @@ test('withdrawing an open lost report detaches approved claims and is not undone
   assert.equal(snapshot.body.items.find(entry => entry.id === 'demo_lost_umbrella').state, 'Withdrawn');
   assert.equal(snapshot.body.requests.find(entry => entry.id === id).status, 'Completed');
 });
+
+for (const mutation of ['create', 'edit']) {
+  for (const revocation of ['logout', 'password change']) {
+    test(`${revocation} during image decoding prevents ${mutation} from committing`, { timeout: 10000 }, async t => {
+      const decoded = Promise.withResolvers(), resume = Promise.withResolvers();
+      t.after(() => resume.resolve());
+      const { app, api, login } = await fixture(t);
+      const email = mutation === 'create' ? 'minji@kaist.ac.kr' : 'admin@kaist.ac.kr';
+      const uploadingSession = await login(email), survivingSession = await login(email);
+      const original = sharp.prototype.toBuffer;
+      // Decode real pixels, then hold completion until HTTP revocation finishes.
+      // No sleeps or decoder stubs: authorization must be checked after this wait.
+      t.mock.method(sharp.prototype, 'toBuffer', async function (...args) {
+        const pixels = await original.apply(this, args);
+        decoded.resolve();
+        await resume.promise;
+        return pixels;
+      });
+      const pending = mutation === 'create'
+        ? api('/api/items', uploadingSession, 'POST', {
+          kind: 'lost', name: 'Revoked upload', category: '기타', location: '도서관',
+          date: '2026-11-06', description: 'Must not be saved', image: images[0]
+        })
+        : api('/api/items/demo_found_umbrella', uploadingSession, 'PATCH', {
+          name: 'Revoked correction', image: images[0]
+        });
+      let before;
+      try {
+        await decoded.promise;
+        const revoked = revocation === 'logout'
+          ? await api('/api/auth/logout', uploadingSession, 'POST', {})
+          : await api('/api/profile', survivingSession, 'PATCH', {
+            currentPassword: 'CampusDemo!24', password: 'ChangedPassword!24'
+          });
+        assert.equal(revoked.status, 200);
+        assert.equal((await api('/api/data', uploadingSession)).status, 401);
+        assert.equal((await api('/api/data', survivingSession)).status, 200);
+        before = structuredClone(app.service.state);
+      } finally {
+        resume.resolve();
+      }
+      assert.equal((await pending).status, 401);
+      assert.deepEqual(app.service.state, before);
+      assert.deepEqual(app.store.read(), before);
+    });
+  }
+}

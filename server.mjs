@@ -82,10 +82,17 @@ export function createApp(options = {}) {
         }
         if(path==='/api/auth/logout'&&req.method==='POST'){if(session)sessions.delete(session.token);res.setHeader('Set-Cookie',`${COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);return json(res,200,{message:'로그아웃되었습니다.'});}
         if(!u)throw new ApiError(401,'로그인이 필요합니다.');
+        // Image decoding can outlive the originating session. Invoke this
+        // synchronously inside the mutation transaction after decoding ends.
+        const authenticate = () => {
+          const current = cookie(req);
+          if (!current || current.token !== session.token) throw new ApiError(401,'로그인이 필요합니다.');
+          return current.userId;
+        };
         if(path==='/api/data'&&req.method==='GET')return json(res,200,service.data(u));
-        if(path==='/api/items'&&req.method==='POST')return json(res,201,await service.createItem(u,payload));
+        if(path==='/api/items'&&req.method==='POST')return json(res,201,await service.createItem(authenticate,payload));
         let match;
-        if((match=/^\/api\/items\/([^/]+)$/.exec(path))&&req.method==='PATCH')return json(res,200,await service.editItem(u,match[1],payload));
+        if((match=/^\/api\/items\/([^/]+)$/.exec(path))&&req.method==='PATCH')return json(res,200,await service.editItem(authenticate,match[1],payload));
         if((match=/^\/api\/items\/([^/]+)\/action$/.exec(path))&&req.method==='POST')return json(res,200,service.itemAction(u,match[1],payload));
         if(path==='/api/requests'&&req.method==='POST')return json(res,201,service.createRequest(u,payload));
         if((match=/^\/api\/requests\/([^/]+)\/action$/.exec(path))&&req.method==='POST')return json(res,200,service.requestAction(u,match[1],payload));
