@@ -1,6 +1,6 @@
 # Campus Found API contract
 
-Local demo, Node.js 24+, no package dependencies. JSON requests/responses. Errors `{error, code?, duplicate?}`. Session HttpOnly cookie. All changes same-origin. Two roles `User`, `Administrator`. Dates YYYY-MM-DD. All UI copy Korean.
+Local demo, Node.js 24+, dependencies installed with `npm ci`. JSON requests/responses. Errors `{error, code?, duplicate?}`. Session HttpOnly cookie. All changes same-origin. Two roles `User`, `Administrator`. Dates YYYY-MM-DD. All UI copy Korean.
 
 ## Authentication
 - GET `/api/session` → `{user:null|User,demo:true,settings}`. Public user `{id,name,email,role,status}`. Settings `{storedDays:30,lostDays:90,dataRetentionDays:180,dropoffLocation:'학생지원팀 분실물 접수처',department:'학생지원팀'}`.
@@ -21,7 +21,7 @@ GET `/api/data` → `{user,items,requests,matches,notifications,settings,users?,
 
 ## Mutate
 - POST `/api/items` `{kind,name,category,location,date,occurredTime?,description,color?,image?,confirmDuplicate?:true}` → `{item}`. Optional occurrence time uses 24-hour HH:mm; unknown time may be omitted. Found duplicate category/location/date yields 409 `{code:'DUPLICATE',error}` unless confirmed. Keyword/color and other search filters run on the authorized `/api/data` collection in the demo client.
-- PATCH `/api/items/:id` editable content fields. Only lost owner while Open, or admin (found). No arbitrary state changes.
+- PATCH `/api/items/:id` editable content fields. Only lost owner while Open, or admin (found). Administrators may correct incident-blocked found reports without resolving the incident or changing its lock. No arbitrary state changes.
 - POST `/api/items/:id/action` `{action,...}` → `{item?}`:
   - withdraw (own Open lost)
   - intake (admin Registered found) `{storageLocation,confidential}`
@@ -48,6 +48,8 @@ GET `/api/data` → `{user,items,requests,matches,notifications,settings,users?,
 - POST `/api/backup` admin `{}` creates an encrypted database backup in the local data folder.
 
 One lost report may have competing pending claims on different found items, but only one linked claim can be approved. Handover closes the linked lost report and rejects its remaining pending claims. Withdrawing an Open lost report remains allowed and detaches request links; it does not cancel an independently verified ownership approval or revive the withdrawn report on handover.
+
+Image uploads (including image-based sign-up documents) must decode as the declared PNG, JPEG, GIF, or WebP type. Limits: 2 MiB encoded bytes, 8192 pixels per frame edge, 16 million aggregate pixels, 100 animation frames, and 3 seconds for pixel decoding. All animation frames are decoded; accepted original bytes are retained. Invalid uploads return 400 without committing changes. Image decoding is asynchronous; the originating session (including expiration or revocation), active account, permissions and current item state are checked again inside the synchronous transaction before an item creation or correction commits. If logout or a password change revokes the uploading session during decoding, the upload returns 401 without saving item or audit changes; other valid sessions remain usable.
 
 ## Scope and safety
 PWA offline shell only: private/API data are never cached. Network unavailable → explicit offline state and no false success. IdentityVerifier interface plus DemoIdentityProvider; no real external verification/mail. Server enforces permissions and lifecycle, not just UI. Signed session cookie, hashed passwords, encrypted stored payloads/documents, input validation, login limiting, audit, rollback on failed mutations. Local .data excluded from source. Seed realistic demo examples.
