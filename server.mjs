@@ -103,6 +103,7 @@ export function createApp(options = {}) {
         if(path==='/api/settings'&&req.method==='PATCH')return json(res,200,service.settings(u,payload));
         if(path==='/api/profile'&&req.method==='PATCH'){const result=service.profile(u,payload);if(payload.password!==undefined)for(const [key,value]of sessions)if(value.userId===u.id&&key!==session?.token)sessions.delete(key);return json(res,200,result);}
         if(path==='/api/notifications/read'&&req.method==='POST')return json(res,200,service.readNotifications(u));
+        if((match=/^\/api\/notifications\/([^/]+)\/read$/.exec(path))&&req.method==='POST')return json(res,200,service.readNotification(u,match[1]));
         if(path==='/api/issues'&&req.method==='POST')return json(res,201,service.issue(u,payload));
         if(path==='/api/backup'&&req.method==='POST'){service.admin(u);const file=service.backup(true);return json(res,200,{message:'암호화 백업을 생성했습니다.',file});}
         throw new ApiError(404,'API를 찾을 수 없습니다.');

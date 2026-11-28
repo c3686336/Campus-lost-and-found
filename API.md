@@ -41,7 +41,7 @@ GET `/api/data` → `{user,items,requests,matches,notifications,settings,users?,
 - POST `/api/requests/:id/pickup` `{}` → `{pickupLocation,department}`. Only the approved/completed requester, when the item is not incident-blocked. Every successful access records `수령 장소 열람` with the actor, request ID and timestamp in the administrator audit log. Non-admin `/api/data` omits these fields even after approval.
 - POST `/api/matches` admin `{lostId,foundId}`; DELETE `/api/matches/:id` admin.
 - POST `/api/users/:id/action` admin `{action:'approve'|'reject'|'block'|'unblock'|'role',role?,reason?}`. Approve/reject external registration, block/unblock access, role User/Administrator, protect last active admin.
-- POST `/api/notifications/read` marks own notifications read.
+- POST `/api/notifications/:id/read` marks one own notification read; POST `/api/notifications/read` marks all own notifications read.
 - PATCH `/api/settings` admin `{storedDays,lostDays,dataRetentionDays,dropoffLocation,department}`.
 - POST `/api/issues` authenticated `{message}`.
 - PATCH `/api/profile` authenticated `{name?,currentPassword?,password?}`. Current password mandatory for changing password.

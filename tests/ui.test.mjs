@@ -14,11 +14,13 @@ function form(name, values) {
 }
 function client(fetch) {
   let forms = [], renders = 0;
+  const listeners = {};
+  const notice = {classList: {toggle() {}, add() {}, remove() {}}, addEventListener() {}};
   const dialog = {open: false, addEventListener() {}, close() { this.open = false; }, showModal() { this.open = true; }, querySelector() { return null; }};
   const document = {
     activeElement: {tagName: 'BODY'}, hidden: false,
-    querySelector(selector) { return selector === '#modal' ? dialog : {classList: {toggle() {}}, addEventListener() {}}; },
-    querySelectorAll() { return forms; }, addEventListener() {}
+    querySelector(selector) { return selector === '#modal' ? dialog : notice; },
+    querySelectorAll() { return forms; }, addEventListener(name, fn) { listeners[name] = fn; }
   };
   const sandbox = {document, navigator: {onLine: true}, window: {addEventListener() {}}, fetch, setInterval() {}, clearTimeout() {}, setTimeout() {}};
   vm.runInNewContext(`${appSource}\nglobalThis.client = {
@@ -26,7 +28,7 @@ function client(fetch) {
     refresh, pickup, detail, requestCard, state:()=>S, view:()=>view,
     submitting(value) { submitting=value; }
   };`, sandbox);
-  return {ui: sandbox.client, dialog, document, get forms() { return forms; }, set forms(value) { forms = value; }, get renders() { return renders; }, render(state) { renders++; forms = [form('settings', state.settings)]; }};
+  return {ui: sandbox.client, dialog, document, notice, click(action, id) { const button = {dataset: {action, id}, isConnected: true}; return listeners.click({target: {closest() { return button; }}}); }, get forms() { return forms; }, set forms(value) { forms = value; }, get renders() { return renders; }, render(state) { renders++; forms = [form('settings', state.settings)]; }};
 }
 const response = data => ({ok: true, json: async () => data});
 
@@ -165,4 +167,24 @@ test('unresolved incident permits administrator correction but exposes no user a
       assert.ok(!c.dialog.innerHTML.includes(`data-action="${action}"`));
     }
   }
+});
+
+test('#28 / §3.4.1, §5.4.2: failed reads remain unread with feedback and can be retried without reading other notices', async () => {
+  let fail = true;
+  const c = client(async () => fail
+    ? {ok: false, status: 503, json: async () => ({error: '알림을 저장하지 못했습니다.'})}
+    : response({}));
+  const state = snapshot('User');
+  state.notifications = [{id: 'notice1', read: false}, {id: 'notice2', read: false}];
+  c.ui.configure(state, current => c.render(current), 'notifications');
+  await c.click('notification', 'notice1');
+  assert.equal(c.ui.state().notifications[0].read, false);
+  assert.equal(c.ui.state().notifications[1].read, false);
+  assert.equal(c.notice.textContent, '알림을 저장하지 못했습니다.');
+  assert.equal(c.dialog.open, false);
+  fail = false;
+  await c.click('notification', 'notice1');
+  assert.equal(c.ui.state().notifications[0].read, true);
+  assert.equal(c.ui.state().notifications[1].read, false);
+  assert.equal(c.dialog.open, false);
 });

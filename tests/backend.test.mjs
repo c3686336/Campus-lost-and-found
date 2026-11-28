@@ -68,6 +68,31 @@ test('complete ownership workflow, competing claims, privacy, wrong handover and
   assert.ok((await admin('/api/data')).body.audit.some(a=>a.action==='물품 handover'));
 });
 
+test('#28 / SRS §5.3.2–5.3.3: individual notification reads are private, isolated and persistent',async t=>{
+  const{app,admin,minji,finder,client}=await fixture(t);
+  assert.equal((await minji('/api/requests','POST',{itemId:'demo_found_earbuds',identity:'김민지',evidence:'MJ 각인'})).status,201);
+  assert.equal((await minji('/api/issues','POST',{message:'알림 읽음 상태 검수'})).status,201);
+  const before=(await admin('/api/data')).body.notifications;
+  const target=before.find(n=>n.itemId==='demo_found_earbuds');
+  const unrelated=before.find(n=>!n.itemId);
+  assert.ok(target&&!target.read&&unrelated&&!unrelated.read);
+  const path=`/api/notifications/${target.id}/read`;
+  assert.equal((await client()(path,'POST',{})).status,401);
+  assert.equal((await minji(path,'POST',{})).status,404);
+  assert.equal((await finder(path,'POST',{})).status,404);
+  assert.equal((await admin('/api/notifications/missing/read','POST',{})).status,404);
+  assert.deepEqual((await admin('/api/data')).body.notifications,before);
+  assert.equal((await admin(path,'POST',{})).status,200);
+  assert.equal((await admin(path,'POST',{})).status,200);
+  const after=(await admin('/api/data')).body.notifications;
+  assert.equal(after.find(n=>n.id===target.id).read,true);
+  assert.equal(after.find(n=>n.id===unrelated.id).read,false);
+  assert.equal(app.store.read().notifications.find(n=>n.id===target.id).read,true);
+  assert.equal((await admin(`/api/notifications/${unrelated.id}/read`,'POST',{})).status,200);
+  assert.equal((await admin('/api/data')).body.notifications.find(n=>n.id===unrelated.id).read,true);
+  assert.equal((await minji('/api/data')).body.notifications.find(n=>n.id===target.id),undefined);
+});
+
 test('intake, duplicate warning, validation, finder restriction, manual matches and hazardous disposal',async t=>{
   const{admin,minji,finder}=await fixture(t);
   const item={kind:'found',name:'초록 노트',category:'도서·문구',location:'전산학동',date:'2026-11-05',description:'책상 위 노트'};
