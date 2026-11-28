@@ -150,3 +150,45 @@
 - Linux, Node.js v24.22.1: `node --test tests/backend.test.mjs tests/ui.test.mjs tests/review.test.mjs tests/acceptance.test.mjs` **33개 통과**. 손상·형식 불일치·크기 초과 이미지 거부, 정상 정적·애니메이션 이미지 유지, 실패 시 무변경, 비동기 검증 중 권한 회수·동시 정정을 포함한다.
 - `PLAYWRIGHT_MODULE=<임시 설치 경로>/node_modules/playwright/index.mjs BROWSER_EXECUTABLE=/usr/bin/chromium node scripts/browser-test.mjs` 통과. Chromium 156.0.8078.73에서 로그인 오류 표시·접근 거부, 사고 처리 중 정정·잠금 유지, 세션 만료 피드백을 확인했다. 브라우저 시나리오 9개, pageerror 없음. `test-results/browser/login-error.png`와 `incident-correction.png`를 직접 확인했다.
 - 이번 실행은 해당 회귀 및 브라우저 시나리오 검증이며, 저장소 단독 테스트·부하·다른 브라우저·실기기 검증을 새로 수행한 기록은 아니다.
+
+### 2026-11-28 · 이슈별 단위·통합·E2E UX 검증
+
+원본 `Team10_SRS.pdf`의 기능 요구사항, §3.1/3.4, §5.2–5.5와 Appendix C를 다시 대조했다. #16은 원문 REQ-5.1을 그대로 구현한 누락 수정이 아니라 이슈의 개선 제안을 반영한 변경이다. #19 신원 자동 입력과 #28 개별 읽음 처리도 SRS 외 UX 확장으로 구분한다.
+
+| 이슈 / SRS 근거 | 검증 경로 및 확인한 계약 |
+| --- | --- |
+| #16 · REQ-5.1–5.5, REQ-6.3/6.5, §5.5.4 | `tests/matching.test.mjs`: 분류·날짜 경계, 두 생성 경로, 상태·사고 잠금·동일 신고자 제외, 정렬, 복수 청구와 소유권 불변, 알림 중복 방지, 관리자 수동 연결 권한, 서버 재시작 후 영속성. E2E: Recovery requested 후보와 동일 신고자 제외 화면 |
+| #19 · REQ-6.1/6.6/6.12, §5.3.3 | `tests/ui.test.mjs`: 이름·이메일 HTML 이스케이프, 신원 수정 가능, 비밀 증빙은 빈 필수값 유지. E2E: 입력 수정 후 관리자 심사에 전달되고 습득자에게는 비공개 |
+| #28 · REQ-5.3/6.4, §3.4.1/5.3.2/5.3.3/5.4.2/5.5.6 | `tests/notifications.test.mjs`, `tests/backend.test.mjs`, `tests/ui.test.mjs`: 단일 읽음 격리·반복 요청·재개방 영속성, 타인/비로그인/없는 ID 거부, 만료·DB 쓰기 실패 롤백, UI 실패 안내와 재시도. E2E: 물품 알림과 물품 없는 문의 알림 각각 두 개 중 하나만 읽고 새로고침 후 유지 |
+| #23 · REQ-7.5, §5.2.3 | 서비스 회귀: 모든 활성 관리자에게 사고 알림, 중복 사고 거부, 차단 관리자에게 해결 알림 미전달. E2E: 두 관리자의 실제 알림 화면, 관리자 정정 중 사용자 잠금 유지, 해결 후 수령 장소 접근 복구 |
+| #27 · REQ-9.3–9.5, §5.5.5/5.5.6 | HTTP 회귀: 기한 전/후 경계, 승인된 물품 처분 금지, 일반 사용자 폐기·삭제 금지, 처분 후 공개 목록 제외. E2E: 설정 저장, 주입된 서버 시계만 3일 진행, 미수령 표시·폐기·기부·오래된 분실 신고 삭제와 재조회 |
+| #5/#10/#13 · REQ-1.4/3.2/3.8 | 기존 로그인 거부·손상 WebP 포함 디코딩·사고 중 관리자 정정 회귀 재실행. E2E: 로그인 오류 유지 및 사고 정정 후 잠금 보존 |
+
+Linux, Node.js v24.22.1에서 다음 단위·통합·호출자 회귀 **60개 모두 통과**(신규 16개):
+
+```sh
+node --test tests/matching.test.mjs tests/notifications.test.mjs tests/backend.test.mjs tests/ui.test.mjs tests/acceptance.test.mjs tests/storage.test.mjs tests/review.test.mjs
+```
+
+Python venv `/tmp/campus-found-playwright-venv`에 Playwright 1.65.2를 설치했다. npm 의존성은 변경하지 않았다. `PLAYWRIGHT_MODULE`은 Python 패키지의 `driver/package/index.mjs`를 가리키며 `BROWSER_ENGINE`으로 엔진을 선택한다.
+
+| 엔진 | 버전 | SRS 매핑 UX 시나리오 | pageerror |
+| --- | --- | --- | --- |
+| Chromium | 159.0.8154.6 | 17개 통과 | 0 |
+| Firefox | 159.0 | 17개 통과 | 0 |
+| WebKit | 27.2 | 17개 통과 | 0 |
+
+세 엔진에서 실제 양식·버튼을 통해 신고, 관리자 심사·인도·사고 해결·보관 정리를 수행했다. 키보드 알림/검색, 복합 검색·결과 없음, 필수값 포커스, 390px 터치 양식 제출, 320/390/768px 가로 넘침, 오프라인 제출 실패 후 입력 보존·재전송, 서비스 워커의 API 비캐시도 확인했다. 영속성은 HTTP 조회와 새로고침으로 검사했으며 DOM이나 업무 상태를 조작해 성공을 만들지 않았다. Chromium의 신원 심사·알림 읽음·보관 관리·모바일 양식, Firefox의 모바일 양식·두 번째 관리자 사고 알림 스크린샷을 직접 확인했다. 엔진별 실행 결과와 이미지: `test-results/browser/{chromium,firefox,webkit}/`.
+
+Arch Linux에서 WebKit의 Ubuntu 빌드에 필요한 ICU 74가 없어 첫 실행은 시작 전에 실패했다. [Ubuntu 공식 libicu74 패키지](https://archive.ubuntu.com/ubuntu/pool/main/i/icu/libicu74_74.2-1ubuntu3.1_amd64.deb)를 `/tmp/campus-found-webkit-libs`에만 풀었다. 시스템 라이브러리나 Playwright 배포 파일은 변경하지 않았다. WebKit 래퍼가 `LD_LIBRARY_PATH`를 덮어쓰므로 다음 환경으로 성공했다:
+
+```sh
+PLAYWRIGHT_MODULE=/tmp/campus-found-playwright-venv/lib/python3.14/site-packages/playwright/driver/package/index.mjs BROWSER_ENGINE=chromium npm run test:browser
+# Firefox: 같은 PLAYWRIGHT_MODULE과 BROWSER_ENGINE=firefox
+# WebKit: 같은 PLAYWRIGHT_MODULE, BROWSER_ENGINE=webkit, 그리고 아래 LD_PRELOAD
+# LD_PRELOAD=/tmp/campus-found-webkit-libs/usr/lib/x86_64-linux-gnu/libicudata.so.74.2:/tmp/campus-found-webkit-libs/usr/lib/x86_64-linux-gnu/libicuuc.so.74.2:/tmp/campus-found-webkit-libs/usr/lib/x86_64-linux-gnu/libicui18n.so.74.2
+```
+
+§5.1.1의 제한된 응답시간 smoke: `LOAD_REQUESTS=20 LOAD_CONCURRENCY=2 node scripts/load-test.mjs` **20/20 성공**, 조회 평균 3.33ms·등록 평균 6.39ms로 시연 임계값 통과. 소량 입력이며 운영 규모나 학기 SLA 증거가 아니다.
+
+한계: 브라우저 **엔진** 검증으로 정식 Chrome/Edge/Safari 전부의 인증을 뜻하지 않는다. Firefox는 `isMobile` 대신 390px viewport+touch를 사용했다. 실기기 카메라·홈 화면 설치, 실제 학교 인증/외부 메일 전달, 원격 TLS 배포와 학기 가용성은 이번 검사에 포함되지 않는다. 보관 기한은 합의 확정값이 아니라 설정된 시연 정책이며 TBD-3 및 잘못된 REQ-9.3의 TBD 번호는 계속 구분한다.

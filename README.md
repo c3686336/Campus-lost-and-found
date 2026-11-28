@@ -74,11 +74,18 @@ node scripts/load-test.mjs
 ```sh
 # Playwright가 설치된 개발 환경에서
 npm run test:browser
-# 외부 테스트 도구를 사용할 경우 모듈/브라우저 경로 지정 가능
-# PLAYWRIGHT_MODULE=/absolute/path/playwright/index.mjs BROWSER_EXECUTABLE=/path/to/chrome npm run test:browser
+# Python venv를 사용하면 앱의 npm 의존성을 바꾸지 않고 설치 가능
+python -m venv /tmp/campus-found-playwright-venv
+/tmp/campus-found-playwright-venv/bin/python -m pip install playwright
+/tmp/campus-found-playwright-venv/bin/python -m playwright install chromium
+PLAYWRIGHT_MODULE=$(/tmp/campus-found-playwright-venv/bin/python -c 'import pathlib,playwright; print(pathlib.Path(playwright.__file__).parent / "driver/package/index.mjs")') npm run test:browser
+# 외부 Chrome 실행 파일은 BROWSER_EXECUTABLE=/path/to/chrome로 지정 가능
+# 다른 엔진도 같은 시나리오로 검사할 경우
+# /tmp/campus-found-playwright-venv/bin/python -m playwright install firefox webkit
+# 위 PLAYWRIGHT_MODULE과 함께 BROWSER_ENGINE=firefox 또는 BROWSER_ENGINE=webkit 지정
 ```
 
-브라우저 검증은 격리된 데이터와 프로필을 사용합니다. 가입·문서 심사·사진 신고·반환 승인·장소 열람·인도·입력 유지·모바일 너비·오프라인 화면을 검사하고 `test-results/browser`에 스크린샷과 결과를 저장합니다.
+브라우저 검증은 격리된 데이터와 프로필을 사용합니다. 가입·문서 심사·사진 신고·반환 승인·장소 열람·인도·입력 유지·모바일 너비·오프라인 화면을 검사하고 `test-results/browser/<engine>/`에 SRS 요구사항별 결과와 스크린샷을 저장합니다. 2026-11-28 실행 결과 및 Arch Linux의 WebKit ICU 의존성 처리 방법은 `docs/COMPLIANCE.md`의 검증 기록을 참조하세요.
 
 2026-11-06 수정본은 macOS, Node.js v24.22.1에서 자동 회귀 테스트 **35개**, 동시 요청 10개로 총 **200건**을 모두 통과했습니다. 조회 평균 6.06ms, 등록 평균 6.72ms로 시연 임계값을 통과했습니다. 실제 Chrome에서도 문서 승인·사진 신고·반환·열람 감사·모바일 너비·오프라인 화면을 검증했습니다. 범위와 한계는 `docs/COMPLIANCE.md`에 기록했습니다.
 

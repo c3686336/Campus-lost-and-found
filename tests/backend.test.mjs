@@ -153,6 +153,30 @@ test('retention, unclaimed marker, disposal and deletion policy',async t=>{
   assert.equal((await admin('/api/data')).body.items.some(i=>i.id==='demo_found_earbuds'),false);
 });
 
+test('#27 / REQ-9.3–9.5, §5.5.5–5.5.6: policy boundaries protect approved items and restrict disposal and deletion',async t=>{
+  const{admin,minji,finder,advance}=await fixture(t);
+  assert.equal((await admin('/api/settings','PATCH',{storedDays:1,lostDays:1})).status,200);
+  const request=(await minji('/api/requests','POST',{itemId:'demo_found_earbuds',identity:'김민지',evidence:'각인'})).body.request;
+  assert.equal((await admin(`/api/requests/${request.id}/action`,'POST',{action:'approve',pickupLocation:'공식 창구',department:'학생지원팀'})).status,200);
+  const lost=(await minji('/api/items','POST',{kind:'lost',name:'기한 검수',category:'기타',location:'검수동',date:'2026-11-05',description:'기한 전 삭제 금지'})).body.item;
+  advance(0.99);
+  assert.equal((await admin('/api/data')).body.items.find(i=>i.id==='demo_found_umbrella').unclaimed,false);
+  assert.equal((await admin('/api/items/demo_found_umbrella/action','POST',{action:'dispose',method:'dispose',reason:'기한 전'})).status,409);
+  assert.equal((await admin(`/api/items/${lost.id}/action`,'POST',{action:'delete'})).status,409);
+  advance(0.02);
+  const items=(await admin('/api/data')).body.items;
+  assert.equal(items.find(i=>i.id==='demo_found_umbrella').unclaimed,true);
+  assert.equal(items.find(i=>i.id==='demo_found_earbuds').unclaimed,false);
+  assert.equal((await admin('/api/items/demo_found_earbuds/action','POST',{action:'dispose',method:'donate',reason:'승인된 물품'})).status,409);
+  assert.equal((await finder('/api/items/demo_found_umbrella/action','POST',{action:'dispose',method:'dispose',reason:'습득자'})).status,403);
+  assert.equal((await finder(`/api/items/${lost.id}/action`,'POST',{action:'delete'})).status,403);
+  assert.equal((await admin('/api/items/demo_found_umbrella/action','POST',{action:'dispose',method:'dispose',reason:'기한 경과'})).status,200);
+  assert.ok(!(await finder('/api/data')).body.matches.some(m=>m.foundId==='demo_found_umbrella'));
+  assert.ok(!(await minji('/api/data')).body.items.some(i=>i.id==='demo_found_umbrella'));
+  assert.equal((await admin(`/api/items/${lost.id}/action`,'POST',{action:'delete'})).status,200);
+  assert.ok(!(await admin('/api/data')).body.items.some(i=>i.id===lost.id));
+});
+
 test('image validation decodes supported static and animated formats and rejects corrupt or oversized content',async()=>{
   for(const file of invalidImages)await assert.rejects(validateFile(file),{status:400});
   for(const file of images)assert.deepEqual(await validateFile(file),file);
@@ -234,3 +258,25 @@ test('async image correction merges the current item and registration checks uni
   assert.equal(rejected.reason.status,409);
   assert.equal(service.state.users.filter(u=>u.email===account.email).length,1);
 });
+test('#23 / REQ-7.5, §5.2.3: every active admin gets one incident notice and resolution restores access',async t=>{
+  const{app:{service}}=await fixture(t);
+  const admin=service.user('demo_admin'),member=service.user('demo_minji'),finder=service.user('demo_finder');
+  service.userAction(admin,finder.id,{action:'role',role:'Administrator'});
+  const request=service.createRequest(member,{itemId:'demo_found_umbrella',identity:'김민지',evidence:'별 스티커'}).request;
+  service.requestAction(admin,request.id,{action:'approve',pickupLocation:'공식 창구',department:'학생지원팀'});
+  service.itemAction(admin,'demo_found_umbrella',{action:'handover'});
+  const before=new Set(service.state.notifications.map(n=>n.id));
+  service.itemAction(admin,'demo_found_umbrella',{action:'report-error',reason:'수령자 재확인'});
+  const notices=service.state.notifications.filter(n=>!before.has(n.id));
+  assert.deepEqual(notices.map(n=>n.userId).sort(),[admin.id,finder.id].sort());
+  assert.ok(notices.every(n=>n.itemId==='demo_found_umbrella'&&!n.read&&n.message.includes('오인도')));
+  assert.throws(()=>service.pickup(member,request.id),{status:409});
+  assert.throws(()=>service.itemAction(admin,'demo_found_umbrella',{action:'report-error',reason:'중복 신고'}),{status:409});
+  assert.deepEqual(service.state.notifications.filter(n=>!before.has(n.id)),notices);
+  service.userAction(admin,finder.id,{action:'block'});
+  const resolvedBefore=new Set(service.state.notifications.map(n=>n.id));
+  service.itemAction(admin,'demo_found_umbrella',{action:'resolve',reason:'소유자 확인 완료'});
+  assert.deepEqual(service.state.notifications.filter(n=>!resolvedBefore.has(n.id)).map(n=>n.userId),[admin.id]);
+  assert.deepEqual(service.pickup(member,request.id),{pickupLocation:'공식 창구',department:'학생지원팀'});
+});
+
