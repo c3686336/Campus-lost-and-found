@@ -319,12 +319,40 @@ try {
   await external.goto(base);
   await noOverflow(external);
   await external.locator('[data-action=register]').click();
-  await external.locator('#modal [name=name]').fill('외부 검수 사용자');
-  await external.locator('#modal [name=email]').fill('browser@example.com');
-  await external.locator('#modal [name=password]').fill('BrowserPass!24');
-  await external.locator('#modal [name=document]').setInputFiles(resolve('public/icon-192.png'));
+  const registration = external.locator('form[data-form=register]');
+  await registration.locator('[name=name]').fill('외부 검수 사용자');
+  await registration.locator('[name=email]').fill('browser@example.com');
+  await registration.locator('[name=password]').fill('BrowserPass!24');
+  await registration.locator('[name=confirmPassword]').fill('DifferentPass!24');
+  await registration.locator('[name=document]').setInputFiles(resolve('public/icon-192.png'));
+  const signupRequests = [];
+  const observeSignup = request => {
+    if (request.method() === 'POST' && ['/api/auth/register', '/api/uploads'].includes(new URL(request.url()).pathname)) signupRequests.push(request.url());
+  };
+  external.on('request', observeSignup);
   await submit(external);
+  await registration.locator('.form-error').filter({ hasText: /일치/ }).waitFor();
+  assert.equal(await registration.locator('[name=confirmPassword]').evaluate(input => input === document.activeElement), true);
+  const [confirmationErrorBox, registrationHeaderBox] = await Promise.all([
+    registration.locator('.form-error').boundingBox(),
+    external.locator('#modal .modal-head').boundingBox(),
+  ]);
+  assert.ok(confirmationErrorBox && registrationHeaderBox && confirmationErrorBox.y >= registrationHeaderBox.y + registrationHeaderBox.height - 1, 'Confirmation feedback must not be hidden behind the sticky dialog header');
+  for (const [name, value] of Object.entries({ name: '외부 검수 사용자', email: 'browser@example.com', password: 'BrowserPass!24', confirmPassword: 'DifferentPass!24' })) {
+    assert.equal(await registration.locator(`[name=${name}]`).inputValue(), value);
+  }
+  assert.equal(await registration.locator('[name=document]').evaluate(input => input.files[0]?.name), 'icon-192.png');
+  assert.deepEqual(signupRequests, [], 'Confirmation mismatch must not upload a document or register an account');
+  await external.screenshot({ path: join(output, 'signup-confirmation-mismatch.png') });
+  check(['REQ-1.1','SRS-5.3'], 'signup confirmation mismatch retains the draft, focuses confirmation and prevents upload/registration requests');
+  await registration.locator('[name=confirmPassword]').fill('BrowserPass!24');
+  const [registered] = await Promise.all([
+    external.waitForResponse(response => response.url() === `${base}/api/auth/register` && response.request().method() === 'POST'),
+    submit(external),
+  ]);
+  assert.equal(registered.status(), 201);
   await external.locator('#modal').waitFor({ state:'hidden' });
+  external.off('request', observeSignup);
   await external.locator('form[data-form=login] [name=email]').fill('browser@example.com');
   await external.locator('form[data-form=login] [name=password]').fill('BrowserPass!24');
   await external.locator('[data-testid=login-button]').click();

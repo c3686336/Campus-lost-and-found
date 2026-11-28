@@ -177,7 +177,7 @@ td small { display: block; color: var(--muted); font-size: 12px; margin-top: 4px
 .form label.checkbox { flex-direction: row; align-items: center; }
 .checkbox input { width: 16px; min-height: 16px; margin: 0; }
 .form-footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 16px; margin-top: 4px; border-top: 1px solid var(--line); }
-.form-error { padding: 12px 14px; border: 1px solid #e2b9b9; border-left: 3px solid var(--red); border-radius: 3px; background: #fff4f4; color: #8f2929; }
+.form-error { padding: 12px 14px; border: 1px solid #e2b9b9; border-left: 3px solid var(--red); border-radius: 3px; background: #fff4f4; color: #8f2929; scroll-margin-top: 6rem; }
 .network { position: sticky; top: 0; z-index: 100; padding: 10px 20px; background: #fff3d8; color: #704b0a; text-align: center; }
 .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 200; width: max-content; max-width: calc(100vw - 32px); padding: 12px 18px; border-radius: 4px; background: #243746; color: white; font-size: 14px; overflow-wrap: anywhere; }
 .report-switch { display: flex; gap: 8px; }
