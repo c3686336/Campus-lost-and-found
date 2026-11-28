@@ -25,7 +25,7 @@ function client(fetch) {
   const sandbox = {document, navigator: {onLine: true}, window: {addEventListener() {}}, fetch, setInterval() {}, clearTimeout() {}, setTimeout() {}};
   vm.runInNewContext(`${appSource}\nglobalThis.client = {
     configure(state, callback, currentView='settings') { S=state; view=currentView; render=()=>callback(S); },
-    refresh, pickup, detail, requestCard, newRequest, state:()=>S, view:()=>view,
+    refresh, pickup, detail, requestCard, newRequest, card, state:()=>S, view:()=>view,
     submitting(value) { submitting=value; }
   };`, sandbox);
   return {ui: sandbox.client, dialog, document, notice, click(action, id) { const button = {dataset: {action, id}, isConnected: true}; return listeners.click({target: {closest() { return button; }}}); }, get forms() { return forms; }, set forms(value) { forms = value; }, get renders() { return renders; }, render(state) { renders++; forms = [form('settings', state.settings)]; }};
@@ -201,4 +201,23 @@ test('#28 / §3.4.1, §5.4.2: failed reads remain unread with feedback and can b
   assert.equal(c.ui.state().notifications[0].read, true);
   assert.equal(c.ui.state().notifications[1].read, false);
   assert.equal(c.dialog.open, false);
+});
+
+test('REQ-4.3: cards and details distinguish missing photos from an actual uploaded image', async () => {
+  const c = client(async () => response({}));
+  const state = snapshot('User');
+  const item = {id: 'found1', kind: 'found', name: '우산', category: '의류·잡화', state: 'Stored', location: '도서관', date: '2026-11-01', description: '손잡이 특징'};
+  state.items = [item];
+  c.ui.configure(state, current => c.render(current));
+  assert.ok(c.ui.card(item).includes('사진 없음'));
+  assert.ok(!c.ui.card(item).includes('<img '));
+  c.ui.detail(item.id);
+  assert.ok(c.dialog.innerHTML.includes('사진 없음'));
+  const image = `data:image/png;base64,${(await readFile(new URL('../public/icon-192.png', import.meta.url))).toString('base64')}`;
+  item.image = image;
+  assert.ok(c.ui.card(item).includes(`src="${image}"`));
+  assert.ok(!c.ui.card(item).includes('사진 없음'));
+  c.ui.detail(item.id);
+  assert.ok(c.dialog.innerHTML.includes(`src="${image}"`));
+  assert.ok(!c.dialog.innerHTML.includes('사진 없음'));
 });

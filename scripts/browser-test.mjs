@@ -199,7 +199,7 @@ try {
   await admin.locator('#modal').waitFor({ state: 'hidden' });
   await member.reload();
   await nav(member,'mine');
-  assert.ok((await member.locator('.item-card').filter({ hasText: '남색 장우산' }).textContent()).includes('찾았어요'));
+  assert.ok((await member.locator('.item-card').filter({ hasText: '남색 장우산' }).textContent()).includes('반환 완료'));
   check(['REQ-6.2','REQ-6.8','REQ-6.9','REQ-7.1','REQ-7.3','REQ-2.7'], 'administrator approval, audited pickup reveal, handover and linked lost closure');
 
   // Use the actual account-management UI to exercise delivery to every active admin.
@@ -376,7 +376,7 @@ try {
   assert.equal(await member.locator('.item-card').count(), 1);
   await search.locator('[name=q]').fill('절대 일치하지 않는 브라우저 검색어');
   await search.locator('[name=q]').press('Enter');
-  await member.getByText('아직 일치하는 물건이 없어요.', { exact: true }).waitFor();
+  await member.getByText('일치하는 신고가 없습니다.', { exact: true }).waitFor();
   await member.screenshot({ path: join(output, 'search-empty-keyboard.png') });
   await member.locator('[data-action=clear-search]').focus();
   await member.keyboard.press('Enter');

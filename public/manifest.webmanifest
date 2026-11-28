@@ -1,14 +1,14 @@
 {
   "id": "/",
-  "name": "다시, 캠퍼스 · Campus Found",
-  "short_name": "다시, 캠퍼스",
+  "name": "KAIST 분실물 센터",
+  "short_name": "KAIST 분실물",
   "lang": "ko",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f6f7f3",
-  "theme_color": "#173b3f",
-  "description": "캠퍼스 분실물 신고·검색·안전한 반환",
+  "background_color": "#f6f7f8",
+  "theme_color": "#194f73",
+  "description": "KAIST 분실·습득 신고, 검색 및 반환 신청",
   "icons": [
     {"src":"/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
     {"src":"/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
