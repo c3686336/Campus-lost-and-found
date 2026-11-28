@@ -25,7 +25,7 @@ function client(fetch) {
   const sandbox = {document, navigator: {onLine: true}, window: {addEventListener() {}}, fetch, setInterval() {}, clearTimeout() {}, setTimeout() {}};
   vm.runInNewContext(`${appSource}\nglobalThis.client = {
     configure(state, callback, currentView='settings') { S=state; view=currentView; render=()=>callback(S); },
-    refresh, pickup, detail, requestCard, state:()=>S, view:()=>view,
+    refresh, pickup, detail, requestCard, newRequest, state:()=>S, view:()=>view,
     submitting(value) { submitting=value; }
   };`, sandbox);
   return {ui: sandbox.client, dialog, document, notice, click(action, id) { const button = {dataset: {action, id}, isConnected: true}; return listeners.click({target: {closest() { return button; }}}); }, get forms() { return forms; }, set forms(value) { forms = value; }, get renders() { return renders; }, render(state) { renders++; forms = [form('settings', state.settings)]; }};
@@ -42,6 +42,20 @@ test('background refresh preserves an unfinished draft while accepting untouched
   assert.equal(c.forms[0].elements.namedItem('storedDays').value, '60');
   assert.equal(c.forms[0].elements.namedItem('lostDays').value, '100');
   assert.equal(c.ui.state().settings.storedDays, '45');
+});
+
+test('#19 / REQ-6.1, §5.3.3: identity prefill escapes account text and never fills ownership evidence', () => {
+  const c = client(async () => response({}));
+  const state = snapshot('User');
+  state.user.name = 'Kim"><img src=x onerror=alert(1)>';
+  state.user.email = 'kim&team@example.org';
+  c.ui.configure(state, current => c.render(current));
+  c.ui.newRequest('found1');
+  assert.ok(c.dialog.innerHTML.includes('value="Kim&quot;&gt;&lt;img src=x onerror=alert(1)&gt; · kim&amp;team@example.org"'));
+  assert.ok(!c.dialog.innerHTML.includes('<img src=x'));
+  assert.match(c.dialog.innerHTML, /<textarea name="evidence"[^>]*><\/textarea>/);
+  assert.match(c.dialog.innerHTML, /<input name="identity"[^>]*required/);
+  assert.ok(!c.dialog.innerHTML.match(/name="identity"[^>]*(readonly|disabled)/));
 });
 
 test('an older response cannot replace newer data, and background polling waits for submission', async () => {

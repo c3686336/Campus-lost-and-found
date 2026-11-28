@@ -32,7 +32,7 @@ GET `/api/data` → `{user,items,requests,matches,notifications,settings,users?,
   - report-error (admin Recovered) `{reason}`
   - resolve (admin blocked) `{reason}`
   - delete (admin lost Open older than lostDays)
-- POST `/api/requests` `{itemId,lostReportId?,identity,evidence}` → `{request}`. Found owner forbidden; account active; duplicate active request by same user forbidden.
+- POST `/api/requests` `{itemId,lostReportId?,identity,evidence}` → `{request}`. Found owner forbidden; account active; duplicate active request by same user forbidden. The UI prefills editable identity with the signed-in account's name and email (#19); confidential ownership evidence remains mandatory and is never autofilled.
 - POST `/api/requests/:id/action` `{action,...}` → `{request}`:
   - approve (admin Pending/More proof) `{pickupLocation,department}` mandatory, explicit special location for hazardous
   - reject (admin Pending/More proof) `{reason}`
