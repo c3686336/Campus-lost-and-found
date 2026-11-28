@@ -192,15 +192,15 @@ test('특별 취급 이관·기한 경과 미수령 처리와 계정 차단을 �
   await denied(`/api/users/${currentAdmin.id}/action`, admin, 'POST', { action: 'block' });
 });
 
-test('거절 후 재보관 때 매칭하고 승인 취소 후에는 수령 장소를 숨긴다', async () => {
+test('반환 검토 중에도 신규 후보를 추가하고 승인 취소 후에는 수령 장소를 숨긴다', async () => {
   const common = { category: '재보관 회귀 검수', location: '검수동 2', date: '2026-11-03' };
   const found = await create(finder, report('found', '재보관', common));
   await act(found, 'intake', { storageLocation: '비공개 보관실', confidential: '검수 비공개 특징' });
   const first = (await ok('/api/requests', member, 'POST', { itemId: found.id, identity: '검수 신원', evidence: '검수 특징' })).request;
   const lost = await create(outsider, report('lost', '신규 대기', { ...common, date: '2026-11-02' }));
-  assert.ok(!(await ok('/api/data', outsider)).matches.some(m => m.lostId === lost.id && m.foundId === found.id));
+  assert.ok((await ok('/api/data', outsider)).matches.some(m => m.lostId === lost.id && m.foundId === found.id), 'Recovery requested 습득물도 복수 청구를 위한 후보로 유지해야 합니다.');
   await ok(`/api/requests/${first.id}/action`, admin, 'POST', { action: 'reject', reason: '특징 불일치' });
-  assert.ok((await ok('/api/data', outsider)).matches.some(m => m.lostId === lost.id && m.foundId === found.id), '재보관 상태 전이도 새 매칭을 생성해야 합니다.');
+  assert.ok((await ok('/api/data', outsider)).matches.some(m => m.lostId === lost.id && m.foundId === found.id), '재보관 상태 전이 뒤에도 기존 후보를 유지해야 합니다.');
 
   await act(found, 'special', { value: true });
   const approved = (await ok('/api/requests', member, 'POST', { itemId: found.id, identity: '추가 신원', evidence: '추가 특징' })).request;

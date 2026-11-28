@@ -14,7 +14,7 @@ GET `/api/data` → `{user,items,requests,matches,notifications,settings,users?,
 - item `{id,kind:'lost'|'found',name,category,location,date,occurredTime?:'HH:mm'|'',description,color,image:null|string,state,ownerId,createdAt,updatedAt,specialHandling,blocked,unclaimed,storageLocation?,confidential?,intakeAt?,notes?}`. image data URL. Only admin sees storageLocation/confidential/notes and internal incident/disposal comments. Pickup details are never included in non-admin list responses; use the audited pickup endpoint. Non-admin ownerId is id only, no identity.
 - lost states `Open,Closed,Withdrawn`; found `Registered,Stored,Recovery requested,Ownership verified,Recovered,Disposed`.
 - request `{id,itemId,userId,lostReportId?,identity?,evidence?,status:'Pending'|'More proof'|'Approved'|'Rejected'|'Completed',reason?,createdAt,updatedAt,pickupLocation?,department?}`. Requester/admin only. Pickup fields in list responses are administrator-only; requesters use the audited endpoint. Admin gets requester name via users.
-- match `{id,lostId,foundId,createdAt}`; users get own lost report matches, ordered same location then newest found date.
+- match `{id,lostId,foundId,createdAt}`; users get own lost report matches, ordered same location then newest found date. Automatic candidates include Stored and Recovery requested found items, but exclude reports owned by the same user.
 - notification `{id,userId,message,itemId?,read,createdAt}`.
 - admin-only maintenance `{backupError:null|string,lastBackupAt:null|string}`. Backup failure does not undo an already committed business change. Manual backup failure returns 503.
 - admin users `{id,name,email,role,status:'active'|'pending_email'|'pending_admin'|'rejected'|'blocked',document?}`; audit `{id,actorId,action,targetId,createdAt}`; issues `{id,userId,message,createdAt}`.
@@ -39,7 +39,7 @@ GET `/api/data` → `{user,items,requests,matches,notifications,settings,users?,
   - more-proof (admin Pending) `{reason}`
   - supplement (requester More proof) `{evidence}` → Pending
 - POST `/api/requests/:id/pickup` `{}` → `{pickupLocation,department}`. Only the approved/completed requester, when the item is not incident-blocked. Every successful access records `수령 장소 열람` with the actor, request ID and timestamp in the administrator audit log. Non-admin `/api/data` omits these fields even after approval.
-- POST `/api/matches` admin `{lostId,foundId}`; DELETE `/api/matches/:id` admin.
+- POST `/api/matches` admin `{lostId,foundId}`; DELETE `/api/matches/:id` admin. Open lost reports can be linked to Stored or Recovery requested found items; same-owner pairs are rejected.
 - POST `/api/users/:id/action` admin `{action:'approve'|'reject'|'block'|'unblock'|'role',role?,reason?}`. Approve/reject external registration, block/unblock access, role User/Administrator, protect last active admin.
 - POST `/api/notifications/:id/read` marks one own notification read; POST `/api/notifications/read` marks all own notifications read.
 - PATCH `/api/settings` admin `{storedDays,lostDays,dataRetentionDays,dropoffLocation,department}`.
